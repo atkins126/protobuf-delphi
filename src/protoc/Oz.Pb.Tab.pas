@@ -707,7 +707,12 @@ begin
     end;
     if s = FUniverse then
     begin
-      obj := x; parser.SemError(2);
+      x := FModule.FImport.dsc;
+      while x.name <> id do
+        x := x.next;
+      if x = FGuard then
+        parser.SemError(2);
+      obj := x;
       exit;
     end;
     s := s.dsc;
@@ -788,7 +793,8 @@ var
   str: TStringList;
   src, stem, filename: string;
 begin
-  FModId := id;
+  stem := TPath.GetFilenameWithoutExtension(id);
+  FModId := stem;
   try
     str := TStringList.Create;
     try
@@ -803,7 +809,6 @@ begin
       parser.Parse;
       Writeln(parser.errors.count, ' errors detected');
       parser.PrintErrors;
-      stem := TPath.GetFilenameWithoutExtension(id);
       filename := TPath.Combine(options.srcDir, stem + '.lst');
       str.SaveToFile(filename);
       if parser.errors.count = 0 then
@@ -827,14 +832,24 @@ const
   // This is a predefined module describing embedded structures and types.
   PredefinedModule = 'google/protobuf/descriptor.proto';
 var
-  tm: TModule;
+  tm: TModule; tp: TBaseParser;
+  x: PObj;
 begin
   if LowerCase(id) = PredefinedModule then exit;
-  tm := FModule;
+  tm := FModule; tp := FParser;
   try
     OpenProto(id, Weak);
+    if tm.FImport = nil then
+      tm.FImport := FModule.Obj
+    else
+    begin
+      x := tm.FImport;
+      while x.next <> FGuard do
+        x := x.next;
+      x.next := FModule.Obj;
+    end;
   finally
-    FModule := tm;
+    FModule := tm; FParser := tp;
   end;
 end;
 
