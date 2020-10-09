@@ -1,3 +1,21 @@
+(* Protocol buffer code generator, for Delphi
+ * Copyright (c) 2020 Marat Shaimardanov
+ *
+ * This file is part of Protocol buffer code generator, for Delphi
+ * is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This file is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this file. If not, see <https://www.gnu.org/licenses/>.
+ *)
+
 unit Oz.Pb.Tab;
 
 interface
@@ -384,9 +402,15 @@ const
     'uint32', 'sfixed32', 'sfixed64', 'sint32', 'sint64');
   // type name in delphi
   DelphiEmbeddedTypes: array [TEmbeddedTypes] of string = (
-    'Unknown', 'Double', 'Single', 'Int64', 'UIint64', 'Integer',
-    'UInt64', 'UInt32', 'Boolean', 'string', 'bytes',
+    'Unknown', 'Double', 'Single', 'Int64', 'Int64', 'Integer',
+    'UInt64', 'UInt32', 'Boolean', 'string', 'TBytes',
     'UInt32', 'UInt32', 'Int64', 'Integer', 'Int64');
+  // read/write method name
+  DelphiRwMethods: array [TEmbeddedTypes] of string = (
+    'Unknown', 'Double', 'Float', 'Int64', 'Int64', 'Int32',
+    'Int64', 'Int32', 'Boolean', 'string', 'Bytes',
+    'Int32', 'Fixed32', 'Fixed64', 'Int32', 'Int64');
+
   DelphiKeywords: array [0 .. 64] of string = (
     'and', 'array', 'as', 'asm', 'begin', 'case', 'class', 'const',
     'constructor', 'destructor', 'dispinterface', 'div', 'do', 'downto',
@@ -405,6 +429,7 @@ uses
   Oz.Pb.Parser;
 
 function GetWireType(tm: TTypeMode): TWireType;
+var b: TBytes;
 begin
   case tm of
     TTypeMode.tmInt32, TTypeMode.tmInt64,
@@ -815,7 +840,7 @@ begin
       begin
         parser.gen.GenerateCode;
         str.Text := parser.gen.Code;
-        filename := TPath.Combine(options.srcDir, stem + '.pas');
+        filename := TPath.Combine(options.srcDir, AsCamel(stem) + '.pas');
         str.SaveToFile(filename);
       end;
     finally

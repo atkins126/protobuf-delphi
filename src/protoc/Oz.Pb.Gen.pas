@@ -1,3 +1,21 @@
+(* Protocol buffer code generator, for Delphi
+ * Copyright (c) 2020 Marat Shaimardanov
+ *
+ * This file is part of Protocol buffer code generator, for Delphi
+ * is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This file is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this file. If not, see <https://www.gnu.org/licenses/>.
+ *)
+
 unit Oz.Pb.Gen;
 
 interface
@@ -15,10 +33,12 @@ type
 {$Region 'TGen: code generator for delphi'}
 
   TMapTypes = TList<PType>;
+
   TGetMap = (
     asVarDecl,
     asParam,
     asVarUsing);
+
   TGen = class(TCocoPart)
   private
     IndentLevel: Integer;
@@ -37,13 +57,10 @@ type
     // Indent control
     procedure Indent;
     procedure Dedent;
-
     // Enum code
     procedure EnumDecl(obj: PObj);
-
     // Map code
     procedure MapDecl(obj: PObj);
-
     // Field tag ident
     function FieldTag(obj: PObj): string;
     // Field tag declaration
@@ -495,19 +512,25 @@ begin
   Indent;
   Wrln('wireType := tag.WireType;');
   Wrln('fieldNumber := tag.FieldNumber;');
-  Wrln('case fieldNumber of');
   x := typ.dsc;
-  while x <> tab.Guard do
+  if x = tab.Guard then
+    // empty message
+    Wrln('Pb.skipField(tag);')
+  else
   begin
-    if x.typ.form = TTypeMode.tmUnion then
-      ReadUnion(x.typ.dsc)
-    else
-      FieldRead(x);
-    x := x.next;
+    Wrln('case fieldNumber of');
+    while x <> tab.Guard do
+    begin
+      if x.typ.form = TTypeMode.tmUnion then
+        ReadUnion(x.typ.dsc)
+      else
+        FieldRead(x);
+      x := x.next;
+    end;
+    Wrln('  else');
+    Wrln('    Pb.skipField(tag);');
+    Wrln('end;');
   end;
-  Wrln('  else');
-  Wrln('    Pb.skipField(tag);');
-  Wrln('end;');
   Wrln('tag := Pb.readTag;');
   Dedent;
   Wrln('end;');
@@ -621,7 +644,7 @@ procedure TFieldGen.Init(g: TGen; obj: PObj; o: TFieldOptions; const ft: string)
 begin
   Self.g := g;
   Self.obj := obj;
-  Self.m := obj.typ.declaration.name;
+  Self.m := obj.typ.declaration.AsType;
   Self.o := o;
   Self.ft := ft;
   mn := o.Msg.DelphiName;
@@ -664,28 +687,34 @@ begin
 end;
 
 procedure TFieldGen.GenType;
+var
+  m: string;
 begin
   // Pb.writeString(TPerson.ftName, Person.Name);
   if o.rule <> TFieldRule.Repeated then
-    g.Wrln('Pb.write%s(%s, %s.%s);', [AsCamel(m), GetTag, mn, n])
+  begin
+    m := DelphiRwMethods[obj.typ.form];
+    g.Wrln('Pb.write%s(%s, %s.%s);', [AsCamel(m), GetTag, mn, n]);
+  end
   else
   begin
     g.Wrln('h.Init;');
     g.Wrln('try');
-    g.Wrln('  for i := 0 to %s.F%s.Count - 1 do', [mn, n]);
+    n := Plural(n);
+    g.Wrln('  for i := 0 to %s.%s.Count - 1 do', [mn, n]);
     case obj.typ.form of
       TTypeMode.tmInt32, TTypeMode.tmUint32, TTypeMode.tmSint32,
       TTypeMode.tmBool, TTypeMode.tmEnum:
-        g.Wrln('    h.writeRawVarint32(%s.F%s[i]);', [mn, n]);
+        g.Wrln('    h.Pb.writeRawVarint32(%s.F%s[i]);', [mn, n]);
       TTypeMode.tmInt64, TTypeMode.tmUint64, TTypeMode.tmSint64:
-        g.Wrln('    h.writeRawVarint64(%s.F%s[i]);', [mn, n]);
+        g.Wrln('    h.Pb.writeRawVarint64(%s.F%s[i]);', [mn, n]);
       TTypeMode.tmFixed64, TTypeMode.tmSfixed64, TTypeMode.tmDouble,
       TTypeMode.tmSfixed32, TTypeMode.tmFixed32, TTypeMode.tmFloat:
-        g.Wrln('    h.writeRawData(%s.F%s[i], sizeof(%s));', [mn, n, t]);
+        g.Wrln('    h.Pb.writeRawData(%s.F%s[i], sizeof(%s));', [mn, n, t]);
       TTypeMode.tmString:
-        g.Wrln('    h.writeRawString(%s.F%s[i]);', [mn, n]);
+        g.Wrln('    h.Pb.writeRawString(%s.F%s[i]);', [mn, n]);
       TTypeMode.tmBytes:
-        g.Wrln('    h.writeRawBytes(%s.F%s[i]);', [mn, n]);
+        g.Wrln('    h.Pb.writeRawBytes(%s.F%s[i]);', [mn, n]);
     end;
     g.Wrln('  Pb.writeMessage(%s, h.Pb^);', [GetTag]);
     g.Wrln('finally');
@@ -702,8 +731,9 @@ begin
   begin
     g.Wrln('h.Init;');
     g.Wrln('try');
-    g.Wrln('  for i := 0 to %s.F%s.Count - 1 do', [mn, n]);
-    g.Wrln('    h.writeRawVarint32(Ord(%s.%s));', [mn, AsCamel(n)]);
+    n := Plural(n);
+    g.Wrln('  for i := 0 to %s.%s.Count - 1 do', [mn, n]);
+    g.Wrln('    h.Pb.writeRawVarint32(Ord(%s.%s[i]));', [mn, n]);
     g.Wrln('  Pb.writeMessage(%s, h.Pb^);', [GetTag]);
     g.Wrln('finally');
     g.Wrln('  h.Free;');
@@ -997,6 +1027,10 @@ begin
         value := key.next;
         Result := Format('%s, %s', [GetRead(key), GetRead(value)]);
       end;
+    TTypeMode.tmBool:
+      Result := 'Pb.readBoolean';
+    TTypeMode.tmInt64, TTypeMode.tmUint64:
+      Result := 'Pb.readInt64';
     else
       Result := Format('Pb.read%s', [AsCamel(msg.name)]);
   end;
@@ -1024,22 +1058,8 @@ var
       Wrln('Pb.Push;');
       Wrln('try');
       Wrln('  while not Pb.Eof do');
-      case obj.typ.form of
-        TTypeMode.tmInt32, TTypeMode.tmUint32, TTypeMode.tmSint32,
-        TTypeMode.tmBool, TTypeMode.tmEnum:
-          Wrln('    Pb.readRawVarint32(%s.F%s[i]);', [mn, n]);
-        TTypeMode.tmInt64, TTypeMode.tmUint64, TTypeMode.tmSint64:
-          Wrln('    Pb.readRawVarint64(%s.F%s[i]);', [mn, n]);
-        TTypeMode.tmFixed64, TTypeMode.tmSfixed64, TTypeMode.tmDouble,
-        TTypeMode.tmSfixed32, TTypeMode.tmFixed32, TTypeMode.tmFloat:
-          Wrln('    Pb.readRawData(%s.F%s[i], sizeof(%s));', [mn, n, mt]);
-        TTypeMode.tmString:
-          Wrln('    Pb.readRawString(%s.F%s[i]);', [mn, n]);
-        TTypeMode.tmBytes:
-          Wrln('    Pb.readRawBytes(%s.F%s[i]);', [mn, n]);
-      end;
       n := 'F' + Plural(obj.name);
-      Wrln('  %s.%s.Add(%s);', [o.Msg.name, n, GetRead(obj)]);
+      Wrln('    %s.%s.Add(%s);', [o.Msg.name, n, GetRead(obj)]);
       Wrln('finally');
       Wrln('  Pb.Pop;');
       Wrln('end;');

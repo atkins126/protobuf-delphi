@@ -1,3 +1,21 @@
+(* Protocol buffer code generator, for Delphi
+ * Copyright (c) 2001-2020 Marat Shaimardanov
+ *
+ * This file is part of Protocol buffer code generator, for Delphi
+ * is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This file is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this file. If not, see <https://www.gnu.org/licenses/>.
+ *)
+
 unit Oz.Pb.Classes;
 
 interface
@@ -170,7 +188,7 @@ type
     function readRawByte: ShortInt;
     // Read "size" bytes
     procedure readRawBytes(var data; size: Integer);
-    function readBytes(size: Integer): TBytes;
+    function readBytes: TBytes;
     // Skip "size" bytes
     procedure skipRawBytes(size: Integer);
   end;
@@ -463,14 +481,10 @@ end;
 
 function TpbInput.readString: string;
 var
-  size: Integer;
   buf, text: TBytes;
 begin
-  size := readRawVarint32;
-  if size <= 0 then
-     EProtobufError.Create(EProtobufError.InvalidSize);
   // Decode utf8 to string
-  buf := readBytes(size);
+  buf := readBytes;
   text := TEncoding.UTF8.Convert(TEncoding.UTF8, TEncoding.Unicode, buf);
   Result := TEncoding.Unicode.GetString(text);
 end;
@@ -578,8 +592,13 @@ begin
   Inc(FCurrent, size);
 end;
 
-function TpbInput.readBytes(size: Integer): TBytes;
+function TpbInput.readBytes: TBytes;
+var
+  size: Integer;
 begin
+  size := readRawVarint32;
+  if size <= 0 then
+     EProtobufError.Create(EProtobufError.InvalidSize);
   if FCurrent > FLast then
     EProtobufError.Create(EProtobufError.EofEncounterd);
   SetLength(Result, size);
