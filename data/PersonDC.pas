@@ -1,20 +1,18 @@
-unit PersonSGL;
+unit PersonDC;
 
 interface
 
 uses
-  System.Classes, System.SysUtils, Oz.SGL.Collections, Oz.Pb.Classes;
-
-{$T+}
+  System.Classes, System.SysUtils, Generics.Collections, Oz.Pb.Classes;
 
 type
+
   TPhoneType = (
     MOBILE = 0,
     HOME = 1,
     WORK = 2);
 
-  PPhoneNumber = ^TPhoneNumber;
-  TPhoneNumber = record
+  TPhoneNumber = class
   const
     ftNumber = 1;
     ftType = 2;
@@ -22,15 +20,14 @@ type
     FNumber: string;
     FType: TPhoneType;
   public
-    procedure Init;
-    procedure Free;
+    constructor Create;
+    destructor Destroy; override;
     // properties
     property Number: string read FNumber write FNumber;
     property &Type: TPhoneType read FType write FType;
   end;
 
-  PPerson = ^TPerson;
-  TPerson = record
+  TPerson = class
   const
     ftName = 1;
     ftId = 2;
@@ -41,33 +38,38 @@ type
     FName: string;
     FId: Integer;
     FEmail: string;
-    FPhones: TsgRecordList<TPhoneNumber>;
+    FPhones: TList<TPhoneNumber>;
     FMyPhone: TPhoneNumber;
   public
-    procedure Init;
-    procedure Free;
+    constructor Create;
+    destructor Destroy; override;
     // properties
     property Name: string read FName write FName;
     property Id: Integer read FId write FId;
     property Email: string read FEmail write FEmail;
-    property Phones: TsgRecordList<TPhoneNumber> read FPhones;
+    property Phones: TList<TPhoneNumber> read FPhones;
     property MyPhone: TPhoneNumber read FMyPhone write FMyPhone;
   end;
 
-  PAddressBook = ^TAddressBook;
-  TAddressBook = record
+  TAddressBook = class
   const
     ftPeoples = 1;
   private
-    FPeoples: TsgRecordList<TPerson>;
+    FPeoples: TList<TPerson>;
   public
-    procedure Init;
-    procedure Free;
+    constructor Create;
+    destructor Destroy; override;
     // properties
-    property Peoples: TsgRecordList<TPerson> read FPeoples;
+    property Peoples: TList<TPerson> read FPeoples;
   end;
 
   TLoadHelper = record helper for TpbLoader
+  type
+    TLoad<T: constructor> = procedure(var Value: T) of object;
+    TLoadPair<Key, Value> = procedure(var Pair: TPair<Key, Value>) of object;
+  private
+    procedure LoadObj<T: constructor>(var obj: T; Load: TLoad<T>);
+    procedure LoadList<T: constructor>(const List: TList<T>; Load: TLoad<T>);
   public
     procedure LoadPerson(var Value: TPerson);
     procedure LoadPhoneNumber(var Value: TPhoneNumber);
@@ -77,11 +79,11 @@ type
   TSaveHelper = record helper for TpbSaver
   type
     TSave<T> = procedure(const S: TpbSaver; const Value: T);
-    TSavePair<Key, Value> = procedure(const S: TpbSaver; const Pair: TsgPair<Key, Value>);
+    TSavePair<Key, Value> = procedure(const S: TpbSaver; const Pair: TPair<Key, Value>);
   private
     procedure SaveObj<T>(const obj: T; Save: TSave<T>; Tag: Integer);
-    procedure SaveList<T>(const List: TsgRecordList<T>; Save: TSave<T>; Tag: Integer);
-    procedure SaveMap<Key, Value>(const Map: TsgHashMap<Key, Value>;
+    procedure SaveList<T>(const List: TList<T>; Save: TSave<T>; Tag: Integer);
+    procedure SaveMap<Key, Value>(const Map: TDictionary<Key, Value>;
       Save: TSavePair<Key, Value>; Tag: Integer);
   public
     class procedure SavePerson(const S: TpbSaver; const Value: TPerson); static;
@@ -93,39 +95,69 @@ implementation
 
 { TPhoneNumber }
 
-procedure TPhoneNumber.Init;
+constructor TPhoneNumber.Create;
 begin
-  Self := Default(TPhoneNumber);
+  inherited Create;
 end;
 
-procedure TPhoneNumber.Free;
+destructor TPhoneNumber.Destroy;
 begin
+  inherited Destroy;
 end;
 
 { TPerson }
 
-procedure TPerson.Init;
+constructor TPerson.Create;
 begin
-  Self := Default(TPerson);
-  FPhones := TsgRecordList<TPhoneNumber>.From(nil);
+  inherited Create;
+  FPhones := TList<TPhoneNumber>.Create;
 end;
 
-procedure TPerson.Free;
+destructor TPerson.Destroy;
 begin
   FPhones.Free;
+  inherited Destroy;
 end;
 
 { TAddressBook }
 
-procedure TAddressBook.Init;
+constructor TAddressBook.Create;
 begin
-  Self := Default(TAddressBook);
-  FPeoples := TsgRecordList<TPerson>.From(nil);
+  inherited Create;
+  FPeoples := TList<TPerson>.Create;
 end;
 
-procedure TAddressBook.Free;
+destructor TAddressBook.Destroy;
 begin
   FPeoples.Free;
+  inherited Destroy;
+end;
+
+{ TLoadHelper }
+
+procedure TLoadHelper.LoadObj<T>(var obj: T; Load: TLoad<T>);
+begin
+  Pb.Push;
+  try
+    obj := T.Create;
+    Load(obj);
+  finally
+    Pb.Pop;
+  end;
+end;
+
+procedure TLoadHelper.LoadList<T>(const List: TList<T>; Load: TLoad<T>);
+var
+  obj: T;
+begin
+  Pb.Push;
+  try
+    obj := T.Create;
+    Load(obj);
+    List.Add(obj);
+  finally
+    Pb.Pop;
+  end;
 end;
 
 procedure TLoadHelper.LoadPhoneNumber(var Value: TPhoneNumber);
@@ -133,7 +165,6 @@ var
   fieldNumber, wireType: integer;
   tag: TpbTag;
 begin
-  Value.Init;
   tag := Pb.readTag;
   while tag.v <> 0 do
   begin
@@ -162,7 +193,6 @@ var
   fieldNumber, wireType: integer;
   tag: TpbTag;
 begin
-  Value.Init;
   tag := Pb.readTag;
   while tag.v <> 0 do
   begin
@@ -187,22 +217,12 @@ begin
       TPerson.ftPhones:
         begin
           Assert(wireType = TWire.LENGTH_DELIMITED);
-          Pb.Push;
-          try
-            LoadPhoneNumber(Value.FPhones.Add^);
-          finally
-            Pb.Pop;
-          end;
+          LoadList<TPhoneNumber>(Value.FPhones, LoadPhoneNumber);
         end;
       TPerson.ftMyPhone:
         begin
           Assert(wireType = TWire.LENGTH_DELIMITED);
-          Pb.Push;
-          try
-            LoadPhoneNumber(Value.FMyPhone);
-          finally
-            Pb.Pop;
-          end;
+          LoadObj<TPhoneNumber>(Value.FMyPhone, LoadPhoneNumber);
         end;
       else
         Pb.skipField(tag);
@@ -216,7 +236,6 @@ var
   fieldNumber, wireType: integer;
   tag: TpbTag;
 begin
-  Value.Init;
   tag := Pb.readTag;
   while tag.v <> 0 do
   begin
@@ -226,12 +245,7 @@ begin
       TAddressBook.ftPeoples:
         begin
           Assert(wireType = TWire.LENGTH_DELIMITED);
-          Pb.Push;
-          try
-            LoadPerson(Value.FPeoples.Add^);
-          finally
-            Pb.Pop;
-          end;
+          LoadList<TPerson>(Value.FPeoples, LoadPerson);
         end;
       else
         Pb.skipField(tag);
@@ -255,18 +269,19 @@ begin
   end;
 end;
 
-procedure TSaveHelper.SaveList<T>(const List: TsgRecordList<T>;
-  Save: TSave<T>; Tag: Integer);
+procedure TSaveHelper.SaveList<T>(const List: TList<T>; Save: TSave<T>; Tag: Integer);
 var
   i: Integer;
   h: TpbSaver;
+  Item: T;
 begin
   h.Init;
   try
     for i := 0 to List.Count - 1 do
     begin
       h.Clear;
-      Save(h, List[i]^);
+      Item := List[i];
+      Save(h, Item);
       Pb.writeMessage(tag, h.Pb^);
     end;
   finally
@@ -274,22 +289,19 @@ begin
   end;
 end;
 
-procedure TSaveHelper.SaveMap<Key, Value>(const Map: TsgHashMap<Key, Value>;
+procedure TSaveHelper.SaveMap<Key, Value>(const Map: TDictionary<Key, Value>;
   Save: TSavePair<Key, Value>; Tag: Integer);
 var
   h: TpbSaver;
-  Pair: TsgHashMapIterator<Key, Value>.PPair;
-  it: TsgHashMapIterator<Key, Value>;
+  Pair: TPair<Key, Value>;
 begin
   h.Init;
   try
-    it := Map.Begins;
-    while it <> Map.Ends do
+    for Pair in Map do
     begin
       h.Clear;
-      Save(h, it.GetPair^);
+      Save(h, Pair);
       Pb.writeMessage(tag, h.Pb^);
-      it.Next;
     end;
   finally
     h.Free;
@@ -298,23 +310,19 @@ end;
 
 class procedure TSaveHelper.SavePhoneNumber(const S: TpbSaver; const Value: TPhoneNumber);
 begin
-  if Value.Number <> '' then
-    S.Pb.writeString(TPhoneNumber.ftNumber, Value.Number);
-  if Ord(Value.&Type) <> 0 then
-    S.Pb.writeInt32(TPhoneNumber.ftType, Ord(Value.&Type));
+  S.Pb.writeString(TPhoneNumber.ftNumber, Value.Number);
+  S.Pb.writeInt32(TPhoneNumber.ftType, Ord(Value.&Type));
 end;
 
 class procedure TSaveHelper.SavePerson(const S: TpbSaver; const Value: TPerson);
 begin
-  if Value.Name <> '' then
-    S.Pb.writeString(TPerson.ftName, Value.Name);
-  if Value.Id <> 0 then
-    S.Pb.writeInt32(TPerson.ftId, Value.Id);
-  if Value.Email <> '' then
-    S.Pb.writeString(TPerson.ftEmail, Value.Email);
+  S.Pb.writeString(TPerson.ftName, Value.Name);
+  S.Pb.writeInt32(TPerson.ftId, Value.Id);
+  S.Pb.writeString(TPerson.ftEmail, Value.Email);
   if Value.FPhones.Count > 0 then
     S.SaveList<TPhoneNumber>(Value.FPhones, SavePhoneNumber, TPerson.ftPhones);
-  S.SaveObj<TPhoneNumber>(Value.FMyPhone, SavePhoneNumber, TPerson.ftMyPhone);
+  if Value.FMyPhone <> nil then
+    S.SaveObj<TPhoneNumber>(Value.FMyPhone, SavePhoneNumber, TPerson.ftMyPhone);
 end;
 
 class procedure TSaveHelper.SaveAddressBook(const S: TpbSaver; const Value: TAddressBook);

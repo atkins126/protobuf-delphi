@@ -1,4 +1,4 @@
-﻿(* Protocol buffer code generator, for Delphi
+(* Protocol buffer code generator, for Delphi
  * Copyright (c) 2020 Marat Shaimardanov
  *
  * This file is part of Protocol buffer code generator, for Delphi
@@ -15,31 +15,26 @@
  * You should have received a copy of the GNU General Public License
  * along with this file. If not, see <https://www.gnu.org/licenses/>.
  *)
+program PbUnitTest;
 
-program Project1;
-
+{$IFDEF CONSOLE_TESTRUNNER}
 {$APPTYPE CONSOLE}
+{$ENDIF}
 
 uses
-  SysUtils,
-  TypInfo,
-  Oz.Pb.Classes in '..\src\proto\Oz.Pb.Classes.pas',
-  Oz.Pb.StrBuffer in '..\src\proto\Oz.Pb.StrBuffer.pas',
+  FastMM4,
+  DUnitTestRunner,
+  Oz.SGL.Heap in '..\..\Oz-SGL\src\Oz.SGL.Heap.pas',
   Oz.SGL.Hash in '..\..\Oz-SGL\src\Oz.SGL.Hash.pas',
   Oz.SGL.HandleManager in '..\..\Oz-SGL\src\Oz.SGL.HandleManager.pas',
-  Oz.SGL.Heap in '..\..\Oz-SGL\src\Oz.SGL.Heap.pas',
   Oz.SGL.Collections in '..\..\Oz-SGL\src\Oz.SGL.Collections.pas',
-  PersonDC in '..\data\PersonDC.pas',
-  PersonSGL in '..\data\PersonSGL.pas',
-  MapSGL in '..\data\MapSGL.pas',
-  TestPersonDC in 'TestPersonDC.pas',
-  TestPersonSGL in 'TestPersonSGL.pas',
-  TestMapSGL in 'TestMapSGL.pas';
+  Oz.Protoc.Test in 'Oz.Protoc.Test.pas',
+  Oz.Pb.Classes in '..\src\proto\Oz.Pb.Classes.pas',
+  Oz.Pb.StrBuffer in '..\src\proto\Oz.Pb.StrBuffer.pas';
 
 {$R *.RES}
 
 begin
-  TestPersonSGL.RunTest;
-  TestPersonDC.RunTest;
-  TestMapSGL.RunTest;
+  DUnitTestRunner.RunRegisteredTests;
 end.
+
